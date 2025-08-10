@@ -173,6 +173,7 @@ class TestTheorems(unittest.TestCase):
 
     def test_phase_coherence_and_noise_channels(self):
         from probstates import PhaseState, coherence_l1, phase_drift, amp_damp
+        from probstates.coherence import dephase
         s = PhaseState(0.25, 0.0)
         c0 = coherence_l1(s)
         self.assertTrue(0.0 <= c0 <= 1.0)
@@ -182,6 +183,9 @@ class TestTheorems(unittest.TestCase):
         self.assertTrue(np.isclose(s2.probability, 0.5 * s1.probability))
         c1 = coherence_l1(s2)
         self.assertLessEqual(c1, 1.0)
+        # dephase меняет фазу, но не p
+        s3 = dephase(s2, sigma_phi=0.2)
+        self.assertTrue(np.isclose(s3.probability, s2.probability))
 
     def test_custom_oplus4_policy(self):
         from probstates import PhaseState, set_phase_or_mode, set_phase_or_custom

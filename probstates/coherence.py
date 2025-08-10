@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Callable, Optional
 from probstates.phase import PhaseState
+import numpy as np
 
 
 def coherence_l1(state: PhaseState) -> float:
@@ -18,18 +19,25 @@ def coherence_l1(state: PhaseState) -> float:
     return float(2.0 * np.sqrt(p * max(0.0, 1.0 - p)))
 
 
-def dephase(state: PhaseState, sigma_phi: float) -> PhaseState:
+def dephase(state: PhaseState, sigma_phi: float, num_samples: int = 129) -> PhaseState:
     """
     Декогеренция по фазе: гауссово размытие фазы с дисперсией sigma_phi^2 (мод 2π).
-    Приближение: просто сдвигаем фазу и усредняем — для простоты вернём ту же p и
-    фазу без изменения, так как явная свёртка по φ требует распределения.
-    Рекомендуется применять к массивам (PhaseRegister) с явным усреднением.
+    Численная свёртка: φ' = arg(∫ e^{i(φ+δ)} N(δ;0,σφ^2) dδ), p остаётся неизменной.
     """
     phi = float(state.phase)
     if sigma_phi <= 0:
         return state
-    # В простейшем детерминированном приближении: фаза не меняется, p неизменна
-    return PhaseState(state.probability, phi)
+    # численная аппроксимация свёртки по δ ∈ [-π, π]
+    num = complex(0.0)
+    den = 0.0
+    grid = np.linspace(-np.pi, np.pi, int(max(17, num_samples)))
+    w = np.exp(-0.5 * (grid / sigma_phi) ** 2)
+    w /= (w.sum() + 1e-16)
+    for delta, weight in zip(grid, w):
+        num += weight * np.exp(1j * (phi + delta))
+        den += weight
+    phi_new = np.angle(num / max(den, 1e-16))
+    return PhaseState(state.probability, phi_new)
 
 
 def phase_drift(state: PhaseState, delta_phi: float) -> PhaseState:

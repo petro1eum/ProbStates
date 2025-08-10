@@ -222,6 +222,28 @@ class PhaseState(State):
         Плотность фазового распределения f_p(θ, φ) = [1 + 2√(p(1-p)) cos(θ-φ)] / (2π).
         """
         return (1.0 + 2.0 * np.sqrt(p * (1.0 - p)) * np.cos(theta - phi)) / (2.0 * np.pi)
+
+    def phase_histogram(self, num_bins: int = 64) -> np.ndarray:
+        """
+        Дискретизация фазовой плотности на равномерной сетке по θ ∈ [0, 2π).
+        Возвращает массив вероятностей длины num_bins, сумма ≈ 1.
+        """
+        num_bins = int(num_bins)
+        if num_bins <= 0:
+            raise ValueError("num_bins must be positive")
+        p, phi = self.probability, self.phase
+        edges = np.linspace(0.0, 2.0 * np.pi, num_bins + 1)
+        probs = np.zeros(num_bins, dtype=float)
+        # аппроксимация интегралов по бинам средней плотностью в центре бина
+        for i in range(num_bins):
+            theta_mid = 0.5 * (edges[i] + edges[i + 1])
+            width = edges[i + 1] - edges[i]
+            probs[i] = self.phase_density(theta_mid, p, phi) * width
+        # нормировка из-за численных ошибок
+        s = probs.sum()
+        if s > 0:
+            probs /= s
+        return probs
     
     def __eq__(self, other) -> bool:
         """
