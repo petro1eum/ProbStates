@@ -155,7 +155,8 @@ def phase_entropy_contribution(p: float, phi: float) -> float:
     # Guard against tiny negative values due to numerical issues
     f_vals = np.clip(f_vals, 1e-15, None)
     integrand = -f_vals * np.log2(f_vals)
-    result = np.trapz(integrand, u)
+    # np.trapz is deprecated; use np.trapezoid (NumPy ≥1.20)
+    result = np.trapezoid(integrand, u)
     return float(result)
 
 

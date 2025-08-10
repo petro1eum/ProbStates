@@ -20,8 +20,18 @@ def set_phase_or_mode(mode: str = 'quant', delta_phi: float = np.pi/2) -> None:
     """
     Устанавливает режим операции OR (⊕₄) для фазовых состояний.
 
+    Доступные режимы:
+    - 'quant'  — квантово‑подобное сложение амплитуд:
+      F_quant = p1 + p2 + 2√(p1p2)cos(φ1−φ2), фаза = arg(√p1e^{iφ1}+√p2e^{iφ2})
+    - 'opt'    — оптимизированное определение из статьи:
+      F_opt = p1 ⊕₂ p2 + 2(1−max(p1,p2))√(p1p2)cos(φ1−φ2), фаза = φ_avg + Δφ·sign(p1+p2−1)
+    - 'norm'   — нормализованное квантово‑подобное:
+      F_norm = min(1, F_quant), фаза как в 'quant'
+    - 'weight' — взвешенный вариант:
+      F_weight = p1 ⊕₂ p2 + (2√(p1p2)cos(φ1−φ2))/(1+max(p1,p2)), фаза как в 'quant'
+
     Args:
-        mode: 'quant' или 'opt'.
+        mode: один из 'quant', 'opt', 'norm', 'weight'.
         delta_phi: параметр Δφ для режима 'opt'.
     """
     global _PHASE_OR_MODE, _PHASE_OR_DELTA_PHI
