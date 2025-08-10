@@ -190,11 +190,14 @@ class TestTheorems(unittest.TestCase):
             return (max(p1, p2), (phi1 + phi2) / 2.0)
         set_phase_or_custom(custom)
         set_phase_or_mode('custom')
-        a = PhaseState(0.2, 0.0)
-        b = PhaseState(0.7, np.pi/2)
-        c = a | b
-        self.assertTrue(np.isclose(c.probability, 0.7))
-        self.assertTrue(np.isclose(c.phase, (0.0 + np.pi/2)/2 % (2*np.pi)))
+        try:
+            a = PhaseState(0.2, 0.0)
+            b = PhaseState(0.7, np.pi/2)
+            c = a | b
+            self.assertTrue(np.isclose(c.probability, 0.7))
+            self.assertTrue(np.isclose(c.phase, (0.0 + np.pi/2)/2 % (2*np.pi)))
+        finally:
+            set_phase_or_mode('quant')
 
 
 if __name__ == "__main__":

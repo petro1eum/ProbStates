@@ -116,6 +116,48 @@ class PhaseRegister:
     def argmax_probability(self) -> int:
         return int(np.argmax(np.abs(self._amplitudes) ** 2))
 
+    # --- Тензоризация и частичные операции ---
+
+    def tensor(self, other: "PhaseRegister") -> "PhaseRegister":
+        """
+        Тензорное произведение регистров: амплитуды по Кронекеру.
+        Возвращает новый регистр.
+        """
+        a = self._amplitudes
+        b = other._amplitudes
+        out = np.kron(a, b)
+        return PhaseRegister(out)
+
+    @classmethod
+    def from_kets(cls, *registers: "PhaseRegister") -> "PhaseRegister":
+        """Тензоризует несколько регистров слева направо."""
+        if len(registers) == 0:
+            raise ValueError("need at least one register")
+        acc = registers[0]
+        for r in registers[1:]:
+            acc = acc.tensor(r)
+        return acc
+
+    def partial_measure(self, qubit: int) -> Tuple[float, float]:
+        """
+        Измеряет маргинальные вероятности выбранного кубита (0-базовый, старший слева).
+        Возвращает (p0, p1).
+        """
+        n = self.num_qubits
+        if not (0 <= qubit < n):
+            raise ValueError("qubit index out of range")
+        N = 1 << n
+        probs = np.abs(self._amplitudes) ** 2
+        p0 = 0.0
+        p1 = 0.0
+        for x in range(N):
+            bit = (x >> (n - 1 - qubit)) & 1
+            if bit == 0:
+                p0 += probs[x]
+            else:
+                p1 += probs[x]
+        return float(p0), float(p1)
+
 
 def deutsch_jozsa(oracle: Callable[[int], int], num_qubits: int) -> Tuple[str, float]:
     """

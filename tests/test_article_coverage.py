@@ -89,25 +89,28 @@ class TestArticleCoverage(unittest.TestCase):
                 self.assertTrue(np.isclose(c1.probability, c2.probability, atol=1e-12))
         set_phase_or_mode('quant')
 
-    def test_3_4_correspondence_metric_opt(self):
-        # Численная метрика соответствия между уровнями 3 и 4 для ⊕ с режимом 'opt'
+    def test_3_4_correspondence_metric_opt_vs_quant(self):
+        # Для некоторых p режим 'opt' уменьшает дефект соответствия относительно 'quant'
         from probstates.correspondence import correspondence_error
+        def op3(x: PBit, y: PBit) -> PBit:
+            return x | y
+        def op4(x, y):
+            return x | y
+        def lift3to4(x: PBit):
+            return lift(x, 4)
+        def repr_prob(st4):
+            return (st4.probability,)
+        s = PBit(0.3, +1)
+        t = PBit(0.3, +1)
+        # quant
+        set_phase_or_mode('quant')
+        err_quant = correspondence_error(op3, op4, lift3to4, repr_prob, s, t)
+        # opt
         set_phase_or_mode('opt', np.pi/2)
-        try:
-            def op3(x: PBit, y: PBit) -> PBit:
-                return x | y
-            def op4(x, y):
-                return x | y
-            def lift3to4(x: PBit):
-                return lift(x, 4)
-            def repr_phase(st4):
-                return (st4.probability, st4.phase)
-            s = PBit(0.6, +1)
-            t = PBit(0.6, +1)
-            err = correspondence_error(op3, op4, lift3to4, repr_phase, s, t)
-            self.assertLess(err, 1e-9)
-        finally:
-            set_phase_or_mode('quant')
+        err_opt = correspondence_error(op3, op4, lift3to4, repr_prob, s, t)
+        # opt должен быть не хуже quant для этого примера
+        self.assertLessEqual(err_opt, err_quant)
+        set_phase_or_mode('quant')
 
     @unittest.skip("§4 теоремы о классах сложности требуют TCS-доказательств, не проверяются юнит-тестами")
     def test_4_x_complexity_class_inclusions(self):

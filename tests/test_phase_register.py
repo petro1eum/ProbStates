@@ -66,6 +66,14 @@ class TestPhaseRegister(unittest.TestCase):
         self.assertEqual(kindm, "balanced")
         self.assertLess(p0_m, 1e-10)
 
+    def test_tensor_and_partial_measure(self):
+        a = PhaseRegister.uniform(1)
+        b = PhaseRegister.uniform(1)
+        ab = a.tensor(b)
+        self.assertEqual(ab.num_qubits, 2)
+        p0, p1 = ab.partial_measure(0)
+        self.assertTrue(np.isclose(p0 + p1, 1.0))
+
 
 if __name__ == "__main__":
     unittest.main()
