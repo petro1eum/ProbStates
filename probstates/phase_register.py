@@ -8,7 +8,7 @@ probstates/phase_register.py
 from __future__ import annotations
 
 import numpy as np
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 
 def _fwht_inplace(a: np.ndarray) -> None:
@@ -157,6 +157,63 @@ class PhaseRegister:
             else:
                 p1 += probs[x]
         return float(p0), float(p1)
+
+    def povm_measure(self, effects: Sequence[Union[np.ndarray, Sequence[float]]]) -> Tuple[np.ndarray, Tuple["PhaseRegister", ...]]:
+        """
+        Общая POVM-измерение: набор эффектов E_k (матрицы NxN, положительные, \sum_k E_k = I).
+        Допускаются диагональные эффекты в виде 1D-векторов длины N (интерпретируются как diag).
+
+        Возвращает:
+            probs (shape K), пост-измерительные нормированные регистры (длины K).
+        """
+        psi = self._amplitudes
+        N = psi.shape[0]
+        mats = []
+        for E in effects:
+            E = np.asarray(E)
+            if E.ndim == 1:
+                if E.shape[0] != N:
+                    raise ValueError("diagonal POVM vector has wrong length")
+                M = np.diag(E.astype(float))
+            else:
+                if E.shape != (N, N):
+                    raise ValueError("POVM matrix must be NxN")
+                M = E.astype(complex)
+            mats.append(M)
+        # probabilities p_k = <psi|E_k|psi>
+        probs = np.array([np.real(np.vdot(psi, M @ psi)) for M in mats], dtype=float)
+        # normalize tiny negatives to zero
+        probs = np.clip(probs, 0.0, None)
+        s = probs.sum()
+        if not np.isclose(s, 1.0, rtol=1e-6, atol=1e-6):
+            # мягкая нормировка, если численно не идеальная сумма
+            if s > 0:
+                probs /= s
+        # post-measure states: |psi_k'> = sqrt(E_k)|psi> / sqrt(p_k)
+        post_regs = []
+        for M, p in zip(mats, probs):
+            if p <= 0:
+                # возврат нулевого вектора (избежать деления)
+                post_regs.append(PhaseRegister(np.zeros_like(psi)))
+                continue
+            # sqrt via eigendecomposition (assume Hermitian)
+            try:
+                w, V = np.linalg.eigh((M + M.conj().T) / 2.0)
+                w = np.clip(np.real(w), 0.0, None)
+                sqrtM = (V * np.sqrt(w)) @ V.conj().T
+            except np.linalg.LinAlgError:
+                # fallback: diagonal only
+                if np.allclose(M, np.diag(np.diag(M))):
+                    sqrtM = np.diag(np.sqrt(np.clip(np.real(np.diag(M)), 0.0, None)))
+                else:
+                    raise
+            v = sqrtM @ psi
+            if np.linalg.norm(v) == 0:
+                post_regs.append(PhaseRegister(np.zeros_like(psi)))
+            else:
+                post = v / np.sqrt(p)
+                post_regs.append(PhaseRegister(post))
+        return probs, tuple(post_regs)
 
 
 def deutsch_jozsa(oracle: Callable[[int], int], num_qubits: int) -> Tuple[str, float]:

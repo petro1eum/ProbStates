@@ -74,6 +74,20 @@ class TestPhaseRegister(unittest.TestCase):
         p0, p1 = ab.partial_measure(0)
         self.assertTrue(np.isclose(p0 + p1, 1.0))
 
+    def test_povm_measure_diagonal(self):
+        n = 2
+        reg = PhaseRegister.uniform(n)
+        probs, _ = reg.to_prob_and_phase()
+        # двухисходная POVM: верхняя половина индексов и нижняя
+        N = 1 << n
+        E0 = np.zeros(N)
+        E0[: N // 2] = 1.0
+        E1 = 1.0 - E0
+        p, posts = reg.povm_measure([E0, E1])
+        self.assertTrue(np.isclose(p.sum(), 1.0, rtol=1e-6, atol=1e-6))
+        # для равномерного состояния вероятности равны 0.5 и 0.5
+        self.assertTrue(np.allclose(p, [0.5, 0.5], rtol=1e-6, atol=1e-6))
+
 
 if __name__ == "__main__":
     unittest.main()
