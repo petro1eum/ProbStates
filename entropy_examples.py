@@ -29,6 +29,8 @@ from probstates.entropy import (
     accessible_information,
     kl_divergence
 )
+from probstates.coherence import dephase, amp_damp
+from probstates import set_phase_or_mode
 
 
 def entropy_analysis_across_levels():
@@ -191,7 +193,7 @@ def phase_entropy_analysis():
         entropies_p_05.append(calculate_entropy(state_p_05))
         entropies_p_09.append(calculate_entropy(state_p_09))
     
-    # Строим график
+    # Строим график (значения должны быть почти независимы от φ)
     plt.figure(figsize=(12, 8))
     plt.plot(phases, entropies_p_01, label='p = 0.1', linewidth=2)
     plt.plot(phases, entropies_p_05, label='p = 0.5', linewidth=2)
@@ -209,6 +211,43 @@ def phase_entropy_analysis():
     plt.close()
     
     print("График зависимости энтропии от фазы сохранен в файле phase_entropy.png")
+
+
+def level4_entropy_under_noise_and_modes():
+    """
+    Демонстрация влияния шумов и режима ⊕₄ на распределения и энтропию результата.
+    """
+    print("\n=== Уровень 4: влияние шума и режима ⊕₄ ===")
+    p1, p2 = 0.5, 0.5
+    phi1 = 0.0
+    deltas = np.linspace(0.0, 2*np.pi, 181)
+    modes = ['quant', 'norm', 'weight', 'opt']
+    sigma_phi = 0.2
+    alpha = 0.3
+    res = {m: [] for m in modes}
+    for d in deltas:
+        a = PhaseState(p1, phi1)
+        b = PhaseState(p2, phi1 + d)
+        # шумы на входах
+        a = dephase(amp_damp(a, alpha), sigma_phi=sigma_phi)
+        b = dephase(amp_damp(b, alpha), sigma_phi=sigma_phi)
+        for m in modes:
+            set_phase_or_mode(m)
+            c = a | b
+            res[m].append(entropy_level4(c))
+    # График энтропии результата vs Δφ
+    plt.figure(figsize=(12, 6))
+    for m in modes:
+        plt.plot(deltas, res[m], label=m)
+    plt.xlabel('Δφ (рад)')
+    plt.ylabel('H4 результата')
+    plt.title('Влияние шума и режима ⊕₄ на энтропию результата')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('phase_entropy_noise_modes.png')
+    plt.close()
+    print("График сохранен: phase_entropy_noise_modes.png")
 
 
 def theorem2_1_verification():
@@ -337,6 +376,7 @@ if __name__ == "__main__":
     kl_divergence_analysis()
     information_loss_analysis()
     phase_entropy_analysis()
+    level4_entropy_under_noise_and_modes()
     theorem2_1_verification()
     entropy_measurement_example()
     interference_entropy_example()
