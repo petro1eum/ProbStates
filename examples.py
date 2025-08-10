@@ -24,6 +24,12 @@ from probstates.visualization import (
     visualize_lifting,
     visualize_projection
 )
+from probstates.entropy import (
+    shannon_entropy,
+    kl_divergence,
+    calculate_entropy,
+)
+from probstates import set_phase_or_mode
 
 
 def basic_states_example():
@@ -453,6 +459,89 @@ def deutsch_jozsa_example():
         print(f"oracle={name:7s} → predicted={kind:9s}, p0={p0:.12f}")
 
 
+def risk_scoring_example():
+    """
+    Пример риск‑скоринга: объединение независимых факторов риска и оценка неопределённости.
+    """
+    print("\n=== Риск‑скоринг: объединение факторов ===")
+    # Пусть есть три фактора риска (вероятности событий):
+    p_breach = ProbabilisticBit(0.12)     # риск утечки
+    p_misconf = ProbabilisticBit(0.08)    # риск мисконфигурации
+    p_phishing = ProbabilisticBit(0.18)   # риск фишинга
+
+    # Комбинированный риск "хотя бы одно произошло": OR₂ по цепочке
+    combined = p_breach | p_misconf | p_phishing
+    print("P(any) =", combined.probability)
+    print("H(any) =", calculate_entropy(combined))
+
+    # Простая шкала скоринга по порогам
+    p = combined.probability
+    tier = ("Low" if p < 0.1 else "Medium" if p < 0.2 else "High")
+    print("Риск‑тIER:", tier)
+
+
+def sensor_fusion_example():
+    """
+    Слияние датчиков: учёт согласованности (фазы) даёт усиление/ослабление уверенности.
+    """
+    print("\n=== Слияние датчиков (фаза как согласованность) ===")
+    # Два датчика схожей силы, но разной согласованности
+    s1 = PhaseState(0.6, 0.0)
+    s2_aligned = PhaseState(0.6, 0.0)
+    s2_opposed = PhaseState(0.6, np.pi)
+
+    fused_aligned = s1 | s2_aligned
+    fused_opposed = s1 | s2_opposed
+
+    # Наивное игнорирование фазы (уровень 2): OR₂(p1, p2)
+    naive = ProbabilisticBit(s1.probability) | ProbabilisticBit(s2_aligned.probability)
+
+    print("Naive OR₂(p1,p2)    =", naive.probability)
+    print("Fused aligned (⊕₄)  =", fused_aligned.probability)
+    print("Fused opposed (⊕₄)  =", fused_opposed.probability)
+
+    # Можно переключить альтернативный режим ⊕₄ из статьи (опционально)
+    set_phase_or_mode('opt', delta_phi=np.pi/2)
+    fused_opt = (s1 | s2_aligned)
+    set_phase_or_mode('quant')  # вернуть дефолт
+    print("Fused aligned ('opt')=", fused_opt.probability)
+
+
+def phase_or_modes_example():
+    """
+    Демонстрация режимов ⊕₄: 'quant' (дефолт), 'norm', 'weight'.
+    """
+    print("\n=== Режимы фазового OR (⊕₄) ===")
+    a = PhaseState(0.7, 0.2)
+    b = PhaseState(0.6, 1.1)
+    for mode in ['quant', 'norm', 'weight']:
+        set_phase_or_mode(mode)
+        c = a | b
+        print(f"mode={mode:6s} → p={c.probability:.6f}, φ={c.phase:.6f}")
+    set_phase_or_mode('quant')
+
+
+def ab_testing_example():
+    """
+    A/B‑тест: моделируем конверсии как Бернулли и смотрим расхождение.
+    """
+    print("\n=== A/B‑тест: сравнение конверсий ===")
+    pA = 0.12
+    pB = 0.145
+    A = ProbabilisticBit(pA)
+    B = ProbabilisticBit(pB)
+
+    print("pA=", pA, "H(A)=", shannon_entropy(pA))
+    print("pB=", pB, "H(B)=", shannon_entropy(pB))
+    # Информационное расхождение между вариантами
+    d_AB = kl_divergence(pA, pB)
+    d_BA = kl_divergence(pB, pA)
+    print("D_KL(A||B)=", d_AB)
+    print("D_KL(B||A)=", d_BA)
+    # Оценка лифта в p
+    lift = (pB - pA) / max(pA, 1e-9)
+    print("Лифт B vs A:", f"{lift*100:.2f}%")
+
 if __name__ == "__main__":
     # Запускаем все примеры
     print("=== Запуск примеров использования библиотеки probstates ===")
@@ -463,5 +552,9 @@ if __name__ == "__main__":
     projection_example()
     coin_flip_example()
     interference_example()
+    phase_or_modes_example()
+    risk_scoring_example()
+    sensor_fusion_example()
+    ab_testing_example()
     
     print("\n=== Все примеры выполнены успешно ===")

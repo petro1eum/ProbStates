@@ -9,8 +9,10 @@ import cmath
 from typing import Union, Tuple, Optional
 
 # Глобальные настройки режима операции OR для фазовых состояний
-# 'quant' — квантово‑подобное сложение амплитуд (по умолчанию)
-# 'opt'   — оптимизированное определение из статьи (с параметром Δφ)
+# 'quant'  — квантово‑подобное сложение амплитуд (по умолчанию)
+# 'opt'    — оптимизированное определение из статьи (с параметром Δφ)
+# 'norm'   — альтернативное: F = min(1, F_quant), фаза как в 'quant'
+# 'weight' — альтернативное: F = p1 ⊕₂ p2 + (2√(p1p2)cosΔφ)/(1+max(p1,p2)), фаза как в 'quant'
 _PHASE_OR_MODE: str = 'quant'
 _PHASE_OR_DELTA_PHI: float = np.pi / 2.0
 
@@ -23,8 +25,8 @@ def set_phase_or_mode(mode: str = 'quant', delta_phi: float = np.pi/2) -> None:
         delta_phi: параметр Δφ для режима 'opt'.
     """
     global _PHASE_OR_MODE, _PHASE_OR_DELTA_PHI
-    if mode not in ('quant', 'opt'):
-        raise ValueError("phase OR mode must be 'quant' or 'opt'")
+    if mode not in ('quant', 'opt', 'norm', 'weight'):
+        raise ValueError("phase OR mode must be 'quant', 'opt', 'norm', or 'weight'")
     _PHASE_OR_MODE = mode
     _PHASE_OR_DELTA_PHI = float(delta_phi)
 
@@ -114,7 +116,8 @@ class PhaseState(State):
         p1, phi1 = self.probability, self.phase
         p2, phi2 = other.probability, other.phase
 
-        if get_phase_or_mode() == 'opt':
+        mode = get_phase_or_mode()
+        if mode == 'opt':
             # F_opt = p1 ⊕2 p2 + K sqrt(p1 p2) cos(Δφ), K = 2(1 - max(p1,p2))
             # G_opt = phi1 (если p2=0) / phi2 (если p1=0) / phi_avg + Δφ * sign(p1+p2-1)
             p_or2 = p1 + p2 - p1 * p2
@@ -134,11 +137,19 @@ class PhaseState(State):
                 phase_result = (phi_avg + s * _PHASE_OR_DELTA_PHI) % (2 * np.pi)
 
             return PhaseState(p_result, phase_result)
-        else:
+        elif mode == 'norm' or mode == 'weight' or mode == 'quant':
             # Режим 'quant' (по умолчанию): квантово‑подобное сложение амплитуд
             cos_term = np.cos(phi1 - phi2)
-            p_result = p1 + p2 + 2 * np.sqrt(p1 * p2) * cos_term
-            p_result = float(np.clip(p_result, 0.0, 1.0))
+            p_quant = p1 + p2 + 2 * np.sqrt(p1 * p2) * cos_term
+            if mode == 'norm':
+                p_result = float(np.clip(min(1.0, p_quant), 0.0, 1.0))
+            elif mode == 'weight':
+                denom = 1.0 + max(p1, p2)
+                p_or2 = p1 + p2 - p1 * p2
+                p_result = p_or2 + (2.0 * np.sqrt(p1 * p2) * cos_term) / denom
+                p_result = float(np.clip(p_result, 0.0, 1.0))
+            else:
+                p_result = float(np.clip(p_quant, 0.0, 1.0))
 
             z1 = cmath.rect(np.sqrt(p1), phi1)
             z2 = cmath.rect(np.sqrt(p2), phi2)

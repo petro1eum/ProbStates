@@ -16,8 +16,21 @@
 
 ## Установка
 
+Установка из исходников (рекомендуется):
+
 ```bash
-pip install probstates
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+pip install -e .
+# Для запуска графических примеров:
+pip install matplotlib
+```
+
+Запуск примеров и тестов:
+
+```bash
+python examples.py      # генерирует изображения, выводит результаты сценариев
+python run_tests.py     # прогонит все автотесты
 ```
 
 ## Быстрый старт
@@ -106,6 +119,36 @@ print(f"Потеря информации: {loss}")  # Выведет приме
 ```
 
 Подробное описание теоретических основ энтропийных характеристик доступно в файле `entropy_theory.md`.
+
+### Фазовый регистр и алгоритм Дойча–Йожи (раздел §5)
+
+Доступны утилиты для регистров уровня 4 и прототипа алгоритма Дойча–Йожи:
+
+- `PhaseRegister.uniform(n)` — равномерное состояние размера 2^n
+- `PhaseRegister.apply_oracle(f)` — фазовый оракул α_x ← α_x·(−1)^{f(x)}
+- `PhaseRegister.hadamard_all()` — FWHT (аналог H^{⊗n})
+- `deutsch_jozsa(oracle, n)` — различение константной/сбалансированной функции
+
+```python
+from probstates import deutsch_jozsa
+
+n = 3
+f_const = lambda x: 1
+f_bal   = lambda x: bin(x).count("1") & 1  # чётность
+
+print(deutsch_jozsa(f_const, n))  # ('constant', ~1.0)
+print(deutsch_jozsa(f_bal, n))    # ('balanced', ~0.0)
+```
+
+Переключение режима операции ⊕₄ (фазовое OR):
+
+```python
+from probstates import set_phase_or_mode
+set_phase_or_mode('quant')                     # по умолчанию: сумма амплитуд
+set_phase_or_mode('opt', delta_phi=3.14159/2)  # оптимизированное правило из статьи
+set_phase_or_mode('norm')                      # F = min(1, F_quant)
+set_phase_or_mode('weight')                    # F = p1⊕2p2 + (2√(p1p2)cosΔφ)/(1+max(p1,p2))
+```
 
 ## Примеры
 
@@ -197,6 +240,48 @@ plt.title('Энтропийные характеристики разных ур
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
+```
+
+### Прикладные сценарии
+
+Риск‑скоринг (объединение независимых факторов риска):
+
+```python
+from probstates import ProbabilisticBit
+from probstates.entropy import calculate_entropy
+
+a = ProbabilisticBit(0.12)
+b = ProbabilisticBit(0.08)
+c = ProbabilisticBit(0.18)
+combined = a | b | c
+print("P(any)=", combined.probability)
+print("H(any)=", calculate_entropy(combined))
+```
+
+Слияние датчиков (учёт согласованности/противофазы):
+
+```python
+import numpy as np
+from probstates import PhaseState
+
+s1 = PhaseState(0.6, 0.0)
+s2_aligned = PhaseState(0.6, 0.0)
+s2_opposed = PhaseState(0.6, np.pi)
+
+print((s1 | s2_aligned).probability)  # конструктивная интерференция
+print((s1 | s2_opposed).probability)  # деструктивная интерференция
+```
+
+A/B‑тест (расхождение и лифт):
+
+```python
+from probstates.entropy import shannon_entropy, kl_divergence
+
+pA, pB = 0.12, 0.145
+print("H(A)=", shannon_entropy(pA), "H(B)=", shannon_entropy(pB))
+print("D_KL(A||B)=", kl_divergence(pA, pB))
+print("D_KL(B||A)=", kl_divergence(pB, pA))
+print("Lift=", (pB - pA)/pA)
 ```
 
 ## Теоретические основы

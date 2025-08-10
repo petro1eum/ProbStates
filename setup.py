@@ -3,9 +3,9 @@ from setuptools import setup, find_packages
 
 setup(
     name="probstates",
-    version="0.1.0",
-    author="ProbStates Team",
-    author_email="info@probstates.org",
+    version="0.2.0",
+    author="Ed Chrednik",
+    author_email="edchrednik@gmail.com",
     description="Библиотека для работы с формализмом вероятностных состояний",
     # Read long description from readme (case-insensitive on most dev machines,
     # but use lowercase filename that exists in repo)
