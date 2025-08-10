@@ -7,8 +7,6 @@ probabilistic state hierarchy, from classical Shannon entropy to quasi-quantum e
 
 import numpy as np
 from typing import Optional, Union, Tuple, List
-import scipy.integrate as integrate
-import scipy.stats as stats
 
 from probstates.base import State
 from probstates.classical import ClassicalBit
@@ -147,16 +145,18 @@ def phase_entropy_contribution(p: float, phi: float) -> float:
     Returns:
         Phase entropy contribution
     """
-    # Define the integrand function for the continuous entropy
-    def integrand(theta):
-        f = phase_distribution(theta, p, phi)
-        if f <= 0:  # Handle numerical issues
-            return 0
-        return -f * np.log2(f)
-    
-    # Perform numerical integration from 0 to 2π
-    result, _ = integrate.quad(integrand, 0, 2*np.pi)
-    return result
+    # Numerically integrate using a dense grid over the relative angle u = θ - φ.
+    # This removes any spurious dependence on φ from discretization and respects
+    # the analytical φ-invariance of the integral.
+    u = np.linspace(0.0, 2.0 * np.pi, 12000, endpoint=False)
+    # f_p(u) = (1 + 2√(p(1-p))cos u)/(2π)
+    a = 2.0 * np.sqrt(p * (1.0 - p))
+    f_vals = (1.0 + a * np.cos(u)) / (2.0 * np.pi)
+    # Guard against tiny negative values due to numerical issues
+    f_vals = np.clip(f_vals, 1e-15, None)
+    integrand = -f_vals * np.log2(f_vals)
+    result = np.trapz(integrand, u)
+    return float(result)
 
 
 def entropy_level4(phase_state: PhaseState) -> float:
@@ -197,26 +197,17 @@ def von_neumann_entropy(quantum_state: QuantumState) -> float:
     Returns:
         von Neumann entropy value
     """
-    # For a pure state, the von Neumann entropy is always 0
-    # We can check if the state is pure by calculating its purity
-    amplitudes = quantum_state.amplitudes
-    # For a 2x2 density matrix (qubit), we can compute eigenvalues directly
-    p = abs(amplitudes[0])**2  # Probability of |0⟩
-    q = abs(amplitudes[1])**2  # Probability of |1⟩
-    
-    # For a pure state, the eigenvalues are {1, 0}
-    # Check if it's pure within numerical precision
-    if np.isclose(p + q, 1.0) and (np.isclose(p, 0.0) or np.isclose(p, 1.0) or 
-                                 np.isclose(q, 0.0) or np.isclose(q, 1.0)):
-        # If it's a pure state that's either |0⟩ or |1⟩, entropy is 0
+    # Build density matrix ρ = |ψ⟩⟨ψ| and compute eigenvalues
+    amplitudes = quantum_state.amplitudes  # shape (2,)
+    rho = np.outer(amplitudes, np.conjugate(amplitudes))  # 2x2 density matrix
+    # Hermitian, use eigvalsh for numerical stability
+    eigenvalues = np.linalg.eigvalsh(rho).real
+    # Clip small negatives/rounding errors and avoid log(0)
+    eigenvalues = np.clip(eigenvalues, 0.0, 1.0)
+    mask = eigenvalues > 0.0
+    if not np.any(mask):
         return 0.0
-    
-    # Since we're dealing with pure states in our library,
-    # the von Neumann entropy should always be 0
-    # But for a general state, we would calculate:
-    eigenvalues = np.array([p, q])
-    eigenvalues = eigenvalues[eigenvalues > 0]  # Avoid log(0)
-    return -np.sum(eigenvalues * np.log2(eigenvalues))
+    return float(-np.sum(eigenvalues[mask] * np.log2(eigenvalues[mask])))
 
 
 def calculate_entropy(state: State) -> float:

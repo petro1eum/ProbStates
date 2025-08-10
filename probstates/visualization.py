@@ -5,9 +5,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Arc, FancyArrowPatch
-from mpl_toolkits.mplot3d import proj3d
-import matplotlib.colors as mcolors
+from matplotlib.patches import Arc
 from typing import Union, List, Optional, Tuple, Any
 
 from probstates.base import State
@@ -17,21 +15,6 @@ from probstates.pbit import PBit
 from probstates.phase import PhaseState
 from probstates.quantum import QuantumState
 
-
-class Arrow3D(FancyArrowPatch):
-    """Класс для отрисовки 3D-стрелок на графике."""
-    
-    def __init__(self, xs, ys, zs, *args, **kwargs):
-        """Инициализация 3D-стрелки."""
-        FancyArrowPatch.__init__(self, (0, 0), (0, 0), *args, **kwargs)
-        self._verts3d = xs, ys, zs
-    
-    def draw(self, renderer):
-        """Отрисовка 3D-стрелки на графике."""
-        xs3d, ys3d, zs3d = self._verts3d
-        xs, ys, zs = proj3d.proj_transform(xs3d, ys3d, zs3d, renderer.M)
-        self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
-        FancyArrowPatch.draw(self, renderer)
 
 
 def visualize_classical_bit(state: ClassicalBit, ax: Optional[plt.Axes] = None, 

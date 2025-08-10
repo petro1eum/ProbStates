@@ -8,6 +8,30 @@ import numpy as np
 import cmath
 from typing import Union, Tuple, Optional
 
+# Глобальные настройки режима операции OR для фазовых состояний
+# 'quant' — квантово‑подобное сложение амплитуд (по умолчанию)
+# 'opt'   — оптимизированное определение из статьи (с параметром Δφ)
+_PHASE_OR_MODE: str = 'quant'
+_PHASE_OR_DELTA_PHI: float = np.pi / 2.0
+
+def set_phase_or_mode(mode: str = 'quant', delta_phi: float = np.pi/2) -> None:
+    """
+    Устанавливает режим операции OR (⊕₄) для фазовых состояний.
+
+    Args:
+        mode: 'quant' или 'opt'.
+        delta_phi: параметр Δφ для режима 'opt'.
+    """
+    global _PHASE_OR_MODE, _PHASE_OR_DELTA_PHI
+    if mode not in ('quant', 'opt'):
+        raise ValueError("phase OR mode must be 'quant' or 'opt'")
+    _PHASE_OR_MODE = mode
+    _PHASE_OR_DELTA_PHI = float(delta_phi)
+
+def get_phase_or_mode() -> str:
+    """Возвращает текущий режим операции OR для фазовых состояний."""
+    return _PHASE_OR_MODE
+
 
 class PhaseState(State):
     """
@@ -74,12 +98,8 @@ class PhaseState(State):
         """
         Операция OR (⊕₄) между двумя фазовыми состояниями.
         
-        Формула:
-        (p₁, e^(iφ₁)) ⊕₄ (p₂, e^(iφ₂)) = (F(p₁,p₂,φ₁,φ₂), e^(iG(p₁,p₂,φ₁,φ₂)))
-        
-        где:
-        F(p₁,p₂,φ₁,φ₂) = p₁ + p₂ + 2√(p₁p₂)cos(φ₁-φ₂)
-        G(p₁,p₂,φ₁,φ₂) = arg(√p₁·e^(iφ₁) + √p₂·e^(iφ₂))
+        По умолчанию используется квантово‑подобное сложение амплитуд (режим 'quant').
+        Дополнительно поддерживается режим 'opt' из статьи (оптимизированное F/G).
         
         Args:
             other: Другое фазовое состояние.
@@ -93,23 +113,39 @@ class PhaseState(State):
         # Извлекаем параметры
         p1, phi1 = self.probability, self.phase
         p2, phi2 = other.probability, other.phase
-        
-        # Вычисляем результирующую вероятность
-        # F(p₁,p₂,φ₁,φ₂) = p₁ + p₂ + 2√(p₁p₂)cos(φ₁-φ₂)
-        cos_term = np.cos(phi1 - phi2)
-        p_result = p1 + p2 + 2 * np.sqrt(p1 * p2) * cos_term
-        
-        # Ограничиваем вероятность в пределах [0,1]
-        p_result = max(0, min(1, p_result))
-        
-        # Вычисляем результирующую фазу
-        # G(p₁,p₂,φ₁,φ₂) = arg(√p₁·e^(iφ₁) + √p₂·e^(iφ₂))
-        z1 = cmath.rect(np.sqrt(p1), phi1)
-        z2 = cmath.rect(np.sqrt(p2), phi2)
-        z_sum = z1 + z2
-        phase_result = cmath.phase(z_sum) % (2 * np.pi)
-        
-        return PhaseState(p_result, phase_result)
+
+        if get_phase_or_mode() == 'opt':
+            # F_opt = p1 ⊕2 p2 + K sqrt(p1 p2) cos(Δφ), K = 2(1 - max(p1,p2))
+            # G_opt = phi1 (если p2=0) / phi2 (если p1=0) / phi_avg + Δφ * sign(p1+p2-1)
+            p_or2 = p1 + p2 - p1 * p2
+            K = 2.0 * (1.0 - max(p1, p2))
+            cos_term = np.cos(phi1 - phi2)
+            p_result = p_or2 + K * np.sqrt(p1 * p2) * cos_term
+            # Безопасный клиппинг
+            p_result = float(np.clip(p_result, 0.0, 1.0))
+
+            if np.isclose(p2, 0.0):
+                phase_result = phi1 % (2 * np.pi)
+            elif np.isclose(p1, 0.0):
+                phase_result = phi2 % (2 * np.pi)
+            else:
+                phi_avg = (phi1 + phi2) / 2.0
+                s = 1.0 if (p1 + p2 - 1.0) >= 0.0 else -1.0
+                phase_result = (phi_avg + s * _PHASE_OR_DELTA_PHI) % (2 * np.pi)
+
+            return PhaseState(p_result, phase_result)
+        else:
+            # Режим 'quant' (по умолчанию): квантово‑подобное сложение амплитуд
+            cos_term = np.cos(phi1 - phi2)
+            p_result = p1 + p2 + 2 * np.sqrt(p1 * p2) * cos_term
+            p_result = float(np.clip(p_result, 0.0, 1.0))
+
+            z1 = cmath.rect(np.sqrt(p1), phi1)
+            z2 = cmath.rect(np.sqrt(p2), phi2)
+            z_sum = z1 + z2
+            phase_result = cmath.phase(z_sum) % (2 * np.pi)
+
+            return PhaseState(p_result, phase_result)
     
     def __invert__(self) -> 'PhaseState':
         """

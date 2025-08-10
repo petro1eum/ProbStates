@@ -16,9 +16,10 @@ ProbStates: Библиотека для работы с иерархией ве�
 from probstates.classical import ClassicalBit
 from probstates.probabilistic import ProbabilisticBit
 from probstates.pbit import PBit
-from probstates.phase import PhaseState
+from probstates.phase import PhaseState, set_phase_or_mode, get_phase_or_mode
 from probstates.quantum import QuantumState
 from probstates.operators import lift, project
+from probstates.phase_register import PhaseRegister, deutsch_jozsa
 
 __version__ = '0.1.0'
 __all__ = [
@@ -28,7 +29,11 @@ __all__ = [
     'PhaseState', 
     'QuantumState',
     'lift',
-    'project'
+    'project',
+    'PhaseRegister',
+    'deutsch_jozsa',
+    'set_phase_or_mode',
+    'get_phase_or_mode'
 ]
 
 # Entropy module is available but not imported by default

@@ -7,7 +7,9 @@ setup(
     author="ProbStates Team",
     author_email="info@probstates.org",
     description="Библиотека для работы с формализмом вероятностных состояний",
-    long_description=open("README.md").read(),
+    # Read long description from readme (case-insensitive on most dev machines,
+    # but use lowercase filename that exists in repo)
+    long_description=open("readme.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/probstates/probstates",
     packages=find_packages(),

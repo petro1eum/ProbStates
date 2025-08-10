@@ -14,7 +14,9 @@ from probstates import (
     PhaseState, 
     QuantumState,
     lift,
-    project
+    project,
+    PhaseRegister,
+    deutsch_jozsa,
 )
 from probstates.visualization import (
     visualize_state,
@@ -416,6 +418,39 @@ def interference_example():
     plt.close(fig3)
     
     print("Интерференция визуализирована в файлах pbit_interference.png, phase_interference.png и quantum_interference.png")
+
+
+def deutsch_jozsa_example():
+    """
+    Демонстрирует работу алгоритма Дойча–Йожи на фазовом регистре.
+    """
+    print("\n=== Алгоритм Дойча–Йожи (фазовый регистр) ===")
+    n = 3
+
+    # Константные оракулы
+    def f_const0(x: int) -> int:
+        return 0
+
+    def f_const1(x: int) -> int:
+        return 1
+
+    # Сбалансированные оракулы (ровно половина входов -> 1)
+    def f_parity(x: int) -> int:
+        # Чётность битов x
+        return bin(x).count("1") & 1
+
+    def f_msb(x: int) -> int:
+        # Старший бит равен 1 для половины входов
+        return (x >> (n - 1)) & 1
+
+    for name, f in [
+        ("const-0", f_const0),
+        ("const-1", f_const1),
+        ("parity", f_parity),
+        ("msb", f_msb),
+    ]:
+        kind, p0 = deutsch_jozsa(f, n)
+        print(f"oracle={name:7s} → predicted={kind:9s}, p0={p0:.12f}")
 
 
 if __name__ == "__main__":
