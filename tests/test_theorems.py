@@ -171,6 +171,31 @@ class TestTheorems(unittest.TestCase):
             kind, p0 = deutsch_jozsa(f, n)
             self.assertEqual(kind, expected)
 
+    def test_phase_coherence_and_noise_channels(self):
+        from probstates import PhaseState, coherence_l1, phase_drift, amp_damp
+        s = PhaseState(0.25, 0.0)
+        c0 = coherence_l1(s)
+        self.assertTrue(0.0 <= c0 <= 1.0)
+        s1 = phase_drift(s, np.pi/3)
+        self.assertTrue(np.isclose(s1.phase, (s.phase + np.pi/3) % (2*np.pi)))
+        s2 = amp_damp(s1, 0.5)
+        self.assertTrue(np.isclose(s2.probability, 0.5 * s1.probability))
+        c1 = coherence_l1(s2)
+        self.assertLessEqual(c1, 1.0)
+
+    def test_custom_oplus4_policy(self):
+        from probstates import PhaseState, set_phase_or_mode, set_phase_or_custom
+        def custom(p1, phi1, p2, phi2):
+            # простая политика: максимум p и средняя фаза
+            return (max(p1, p2), (phi1 + phi2) / 2.0)
+        set_phase_or_custom(custom)
+        set_phase_or_mode('custom')
+        a = PhaseState(0.2, 0.0)
+        b = PhaseState(0.7, np.pi/2)
+        c = a | b
+        self.assertTrue(np.isclose(c.probability, 0.7))
+        self.assertTrue(np.isclose(c.phase, (0.0 + np.pi/2)/2 % (2*np.pi)))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@
 from probstates.base import State
 import numpy as np
 import cmath
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, Callable
 
 # Глобальные настройки режима операции OR для фазовых состояний
 # 'quant'  — квантово‑подобное сложение амплитуд (по умолчанию)
@@ -15,6 +15,7 @@ from typing import Union, Tuple, Optional
 # 'weight' — альтернативное: F = p1 ⊕₂ p2 + (2√(p1p2)cosΔφ)/(1+max(p1,p2)), фаза как в 'quant'
 _PHASE_OR_MODE: str = 'quant'
 _PHASE_OR_DELTA_PHI: float = np.pi / 2.0
+_PHASE_OR_CUSTOM: Optional[Callable[[float, float, float, float], Tuple[float, float]]] = None
 
 def set_phase_or_mode(mode: str = 'quant', delta_phi: float = np.pi/2) -> None:
     """
@@ -35,10 +36,21 @@ def set_phase_or_mode(mode: str = 'quant', delta_phi: float = np.pi/2) -> None:
         delta_phi: параметр Δφ для режима 'opt'.
     """
     global _PHASE_OR_MODE, _PHASE_OR_DELTA_PHI
-    if mode not in ('quant', 'opt', 'norm', 'weight'):
-        raise ValueError("phase OR mode must be 'quant', 'opt', 'norm', or 'weight'")
+    if mode not in ('quant', 'opt', 'norm', 'weight', 'custom'):
+        raise ValueError("phase OR mode must be 'quant', 'opt', 'norm', 'weight', or 'custom'")
     _PHASE_OR_MODE = mode
     _PHASE_OR_DELTA_PHI = float(delta_phi)
+
+def set_phase_or_custom(custom_fn: Callable[[float, float, float, float], Tuple[float, float]]) -> None:
+    """
+    Устанавливает пользовательскую политику для операции OR (⊕₄).
+
+    custom_fn: функция (p1, phi1, p2, phi2) -> (p_result, phi_result),
+    должна возвращать p_result в [0,1] и фазу в радианах.
+    После вызова этой функции активируйте режим через set_phase_or_mode('custom').
+    """
+    global _PHASE_OR_CUSTOM
+    _PHASE_OR_CUSTOM = custom_fn
 
 def get_phase_or_mode() -> str:
     """Возвращает текущий режим операции OR для фазовых состояний."""
@@ -127,6 +139,13 @@ class PhaseState(State):
         p2, phi2 = other.probability, other.phase
 
         mode = get_phase_or_mode()
+        if mode == 'custom':
+            if _PHASE_OR_CUSTOM is None:
+                raise RuntimeError("Custom OR policy not set. Call set_phase_or_custom first.")
+            p_result, phase_result = _PHASE_OR_CUSTOM(p1, phi1, p2, phi2)
+            p_result = float(np.clip(p_result, 0.0, 1.0))
+            phase_result = float(phase_result) % (2 * np.pi)
+            return PhaseState(p_result, phase_result)
         if mode == 'opt':
             # F_opt = p1 ⊕2 p2 + K sqrt(p1 p2) cos(Δφ), K = 2(1 - max(p1,p2))
             # G_opt = phi1 (если p2=0) / phi2 (если p1=0) / phi_avg + Δφ * sign(p1+p2-1)
@@ -179,6 +198,30 @@ class PhaseState(State):
         """
         phase_result = (self.phase + np.pi) % (2 * np.pi)
         return PhaseState(1 - self.probability, phase_result)
+
+    # --- Измерения и вспомогательные функции уровня 4 ---
+
+    def measure_sign(self) -> 'PBit':
+        """
+        Измерение в «знаковой» базе: возвращает P-бит с той же вероятностью p
+        и полярностью sign(cos φ) согласно определению P_{4→3}.
+        """
+        # Локальный импорт, чтобы избежать циклических зависимостей
+        from probstates.pbit import PBit
+        sign = +1 if np.cos(self.phase) >= 0 else -1
+        return PBit(self.probability, sign)
+
+    def as_prob(self) -> 'ProbabilisticBit':
+        """Возвращает вероятностный бит уровня 2 со значением p."""
+        from probstates.probabilistic import ProbabilisticBit
+        return ProbabilisticBit(self.probability)
+
+    @staticmethod
+    def phase_density(theta: float, p: float, phi: float) -> float:
+        """
+        Плотность фазового распределения f_p(θ, φ) = [1 + 2√(p(1-p)) cos(θ-φ)] / (2π).
+        """
+        return (1.0 + 2.0 * np.sqrt(p * (1.0 - p)) * np.cos(theta - phi)) / (2.0 * np.pi)
     
     def __eq__(self, other) -> bool:
         """
