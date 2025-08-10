@@ -150,6 +150,19 @@ set_phase_or_mode('norm')                      # F = min(1, F_quant)
 set_phase_or_mode('weight')                    # F = p1⊕2p2 + (2√(p1p2)cosΔφ)/(1+max(p1,p2))
 ```
 
+Пользовательская политика для ⊕₄:
+
+```python
+from probstates import set_phase_or_custom
+
+def my_oplus_policy(p1, phi1, p2, phi2):
+    # пример: берём максимум по вероятности и среднюю фазу
+    return (max(p1, p2), (phi1 + phi2) / 2)
+
+set_phase_or_custom(my_oplus_policy)
+set_phase_or_mode('custom')
+```
+
 ## Примеры
 
 ### Интерференция на разных уровнях
@@ -283,6 +296,43 @@ print("D_KL(A||B)=", kl_divergence(pA, pB))
 print("D_KL(B||A)=", kl_divergence(pB, pA))
 print("Lift=", (pB - pA)/pA)
 ```
+
+### Уровень 4: когерентность и шум
+
+```python
+from probstates import PhaseState
+from probstates import coherence_l1, phase_drift, amp_damp
+from probstates.coherence import dephase
+
+s = PhaseState(0.25, 0.0)
+print("C_l1=", coherence_l1(s))
+s = phase_drift(s, 0.3)
+s = amp_damp(s, 0.2)
+s = dephase(s, sigma_phi=0.1)
+```
+
+### Фазовый регистр: тензоризация и POVM
+
+```python
+from probstates import PhaseRegister
+import numpy as np
+
+a = PhaseRegister.uniform(1)
+b = PhaseRegister.uniform(1)
+ab = a.tensor(b)                     # тензорное произведение
+p0, p1 = ab.partial_measure(0)       # маргинальные вероятности старшего разряда
+
+# Диагональная POVM из двух эффектов (пополам)
+N = 1 << ab.num_qubits
+E0 = np.zeros(N); E0[:N//2] = 1.0
+E1 = 1.0 - E0
+probs, posts = ab.povm_measure([E0, E1])
+print(probs)  # ~[0.5, 0.5] для равномерного регистра
+```
+
+### Ноутбук: режимы ⊕₄ под шумом
+
+См. `examples_oplus4_noise.ipynb`: сравнение 'quant'/'norm'/'weight'/'opt' по F(Δφ) и под шумами `dephase`/`amp_damp`.
 
 ## Теоретические основы
 
