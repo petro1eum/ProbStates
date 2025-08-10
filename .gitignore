@@ -60,3 +60,13 @@ private_key*
 public_key*
 ssh_keys/
 
+# 📓 Notebooks (optional to ignore in production repos)
+notebooks/
+*.ipynb
+
+# 🧪 Local backtest scripts (optional)
+scripts/btc_backtest.py
+
+# 🧩 Domain-specific modules (optional if kept private)
+probstates/markets.py
+
