@@ -22,8 +22,30 @@ from probstates.operators import lift, project
 from probstates.phase_register import PhaseRegister, deutsch_jozsa
 from probstates.coherence import coherence_l1, dephase, phase_drift, amp_damp, coherence_under_noise
 from probstates.correspondence import correspondence_error
+from probstates.markets import (
+    sma, momentum, rsi,
+    indicator_to_prob, sentiment_to_phase,
+    FeatureSpec, make_phase_states, aggregate_specs,
+    btc_signal_from_arrays,
+)
+from probstates.calculus import (
+    central_diff,
+    l2_or, grad_l2_or, l2_and, grad_l2_and,
+    shannon_entropy as shannon_entropy_calculus,
+    d_shannon_entropy_dp,
+    l4_quant_or, grad_l4_quant_or, phase_sensitivity,
+    expected_l2_or_under_beta,
+    mc_expected_l4_quant_or_under_beta,
+    kappa_from_phases, rho_from_ps,
+)
+# Optional: transformer requires PyTorch; import lazily if available
+try:
+    from probstates.transformer import ProbStatesTransformer, train_transformer
+    _HAS_TORCH = True
+except Exception:
+    _HAS_TORCH = False
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 __all__ = [
     'ClassicalBit', 
     'ProbabilisticBit', 
@@ -40,6 +62,9 @@ __all__ = [
     'coherence_l1', 'dephase', 'phase_drift', 'amp_damp', 'coherence_under_noise',
     'correspondence_error'
 ]
+
+if _HAS_TORCH:
+    __all__ += ['ProbStatesTransformer', 'train_transformer']
 
 # Entropy module is available but not imported by default
 # to avoid unnecessary dependencies

@@ -1,0 +1,14 @@
+{
+  "window": [
+    "2025-08-01",
+    "2025-08-10"
+  ],
+  "n_days": 9,
+  "n_trading_days": 9,
+  "hit_rate_on_decisive": 0.5,
+  "strategy_metrics": {
+    "CAGR": 1.3019697247556237,
+    "Sharpe": 7.756786073761588,
+    "MDD": 0.008481407388213754
+  }
+}

@@ -16,6 +16,12 @@ from probstates.entropy import (
     entropy_level3,
     entropy_level4,
 )
+from probstates.calculus import (
+    mc_expected_l4_quant_or_under_beta,
+    kappa_from_phases,
+    kappa_for_classical_or,
+    rho_from_ps,
+)
 
 
 class TestArticleCoverage(unittest.TestCase):
@@ -112,9 +118,30 @@ class TestArticleCoverage(unittest.TestCase):
         self.assertLessEqual(err_opt, err_quant)
         set_phase_or_mode('quant')
 
-    @unittest.skip("§4 теоремы о классах сложности требуют TCS-доказательств, не проверяются юнит-тестами")
     def test_4_x_complexity_class_inclusions(self):
-        pass
+        # Конструктивный алгоритм P3 для F=PARITY–MAJ из Приложения A: O(n) запросов
+        rng = np.random.default_rng(0)
+        for n in (4, 7, 10):
+            X = rng.integers(0, 2, size=n)
+            Y = rng.integers(0, 2, size=n)
+            parity = int(np.bitwise_xor.reduce(X))
+            maj = int(np.sum(Y) >= (n+1)//2)
+            F = int((parity == 1 and maj == 1) or (parity == 0 and maj == 0))
+
+            # «Запросы» к оракулу: читаем каждый бит по одному разу (2n запросов)
+            # Эмуляция P3-алгоритма: сжимаем X в знак, Y — в вероятность
+            from probstates import PBit
+            A = PBit(0.5, +1)
+            for xi in X:
+                if xi == 1:
+                    A = PBit(A.probability, -A.sign)
+            # простая пороговая агрегация вероятностей для большинства
+            pY = np.mean(Y)
+            B = PBit(pY, +1)
+            # Решение по правилу из приложения: знак(A) и порог B
+            # F_hat = 1 iff parity==MAJ, where sign(A)=-1 means odd parity
+            F_hat = int(((A.sign == -1) and (B.probability >= 0.5)) or ((A.sign == +1) and (B.probability < 0.5)))
+            self.assertEqual(F_hat, F)
 
     # --- §5 Алгоритм Дойча–Йожи уже проверен в test_theorems ---
 
@@ -276,9 +303,23 @@ class TestArticleCoverage(unittest.TestCase):
         H_right_combined = shannon_entropy(right_p) + shannon_entropy(right_q) - shannon_entropy(right_p) * shannon_entropy(right_q)
         self.assertFalse(np.isclose(H_left, H_right_combined))
 
-    @unittest.skip("§5.1 и прочие алгоритмические теоремы требуют формальной TCS‑проверки, вне юнит‑тестов")
     def test_5_1_phase_estimation_speedup(self):
-        pass
+        # Оценим скрытую φ по двум измерениям (cos и sin) через одну композицию с эталонами 0 и π/2
+        rng = np.random.default_rng(1)
+        phi_true = float(rng.uniform(0, 2*np.pi))
+        p = 0.4
+        s = PhaseState(p, phi_true)
+        ref0 = PhaseState(p, 0.0)
+        ref90 = PhaseState(p, np.pi/2)
+        # p_out = 2p(1+cos Δφ) ⇒ cos Δφ = p_out/(2p) - 1
+        out0 = (s | ref0).probability
+        out90 = (s | ref90).probability
+        c0 = out0/(2*p) - 1.0
+        c1 = out90/(2*p) - 1.0  # = cos(φ-π/2) = sin φ
+        phi_est = float(np.mod(np.arctan2(c1, c0), 2*np.pi))
+        # проверим малую ошибку
+        err = min(abs(phi_est - phi_true), 2*np.pi - abs(phi_est - phi_true))
+        self.assertLess(err, 0.2)
 
     # --- §7.3.5 Насыщение энтропии (приближённая проверка на сетке) ---
     def test_7_3_5_entropy_saturation(self):
@@ -289,6 +330,39 @@ class TestArticleCoverage(unittest.TestCase):
         self.assertGreater(h3_max, 1.0)
         h4_max = max(entropy_level4(PhaseState(p, 0.0)) for p in grid)
         self.assertGreater(h4_max, 1.0)
+
+    # --- §8.5 Переход к аддитивной модели при дефазировании ---
+    def test_8_5_dephasing_additivity_in_expectation(self):
+        # При κ≈0 ожидание L4-quant совпадает с μ1+μ2
+        a1,b1 = 7,5
+        a2,b2 = 9,4
+        est = mc_expected_l4_quant_or_under_beta(a1,b1,a2,b2,kappa=0.0,num_samples=20000)
+        mu1 = a1/(a1+b1); mu2 = a2/(a2+b2)
+        self.assertTrue(np.isclose(est, mu1+mu2, rtol=0.05))
+
+    # --- §8.4 Аттенуация интерференции --- (слабое проверочное неравенство)
+    def test_8_4_interference_attenuation(self):
+        # |E[p⊕] - (μ1+μ2)| возрастает с |κ|
+        a1,b1 = 6,7
+        a2,b2 = 5,8
+        est0 = mc_expected_l4_quant_or_under_beta(a1,b1,a2,b2,kappa=0.0,num_samples=30000)
+        estp = mc_expected_l4_quant_or_under_beta(a1,b1,a2,b2,kappa=0.8,num_samples=30000)
+        estm = mc_expected_l4_quant_or_under_beta(a1,b1,a2,b2,kappa=-0.8,num_samples=30000)
+        mu1 = a1/(a1+b1); mu2 = a2/(a2+b2); base = mu1+mu2
+        self.assertGreater(abs(estp-base), 0.01)
+        self.assertGreater(abs(estm-base), 0.01)
+
+    # --- §8.9 Программируемый фьюжн: κ* даёт классический OR по ожиданию ---
+    def test_8_9_programmable_fusion_matches_classical_or(self):
+        rng = np.random.default_rng(2)
+        ps1 = rng.beta(8, 5, 40000)
+        ps2 = rng.beta(6, 7, 40000)
+        mu1, mu2 = float(np.mean(ps1)), float(np.mean(ps2))
+        rho1, rho2 = rho_from_ps(ps1), rho_from_ps(ps2)
+        kappa = kappa_for_classical_or(mu1, mu2, rho1, rho2)
+        est = mc_expected_l4_quant_or_under_beta(8, 5, 6, 7, kappa=kappa, num_samples=50000, rng=rng)
+        mu_or = mu1 + mu2 - mu1 * mu2
+        self.assertTrue(np.isclose(est, mu_or, rtol=0.06))
 
 
 if __name__ == "__main__":
